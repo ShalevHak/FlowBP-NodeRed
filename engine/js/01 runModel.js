@@ -157,13 +157,35 @@ function execute(node, token) {
           }
         }
       //-----------------------------------------------------------------------
-      // add-change-attribute 
+      // change-condition 
       //-----------------------------------------------------------------------
-      case "change-attribute":
-        if (node.attribute&&node.value){
-          // cloneToken.node.attribut=eval((String(node.value.replace(/tkn\./g, 'cloneToken.'))))
+      case "change-condition":
+        if (node.condition){
+          cloneToken.condition=String(node.condition.replace(/tkn\./g, 'cloneToken.'))
         }
         return [cloneToken]
+      //-----------------------------------------------------------------------
+      // add-attribute
+      //-----------------------------------------------------------------------
+      case "add-attribute":
+        if(node.value&&node.attribute){
+          switch (node.attribute){
+            case "request":
+              cloneToken.request=eval((String(node.value.replace(/tkn\./g, 'cloneToken.'))))
+            case "block":
+              cloneToken.block=eval((String(node.value.replace(/tkn\./g, 'cloneToken.'))))
+            case "wait-for":
+              cloneToken.waitFor=eval((String(node.value.replace(/tkn\./g, 'cloneToken.'))))
+            case "condition":
+              cloneToken.condition=eval((String(node.value.replace(/tkn\./g, 'cloneToken.'))))
+            case "index":
+              cloneToken.index=eval((String(node.value.replace(/tkn\./g, 'cloneToken.'))))   
+            case "mark":
+              cloneToken.mark=eval((String(node.value.replace(/tkn\./g, 'cloneToken.'))))   
+          } 
+        }
+        return [cloneToken]
+
       //-----------------------------------------------------------------------
       // bsync
       //-----------------------------------------------------------------------
