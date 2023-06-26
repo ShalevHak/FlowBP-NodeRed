@@ -120,6 +120,9 @@ function execute(node, token) {
         if(node.level === 'fine')
           bp.log.fine(cloneToken)
         return []
+      //-----------------------------------------------------------------------
+      // loop
+      //-----------------------------------------------------------------------
       case "loop":
         if ("count" in cloneToken) {
           if (cloneToken.count + 1 < node.to) {
@@ -133,8 +136,11 @@ function execute(node, token) {
           cloneToken.count = parseInt(node.from)
           return [cloneToken, undefined]
         }
-
+      //-----------------------------------------------------------------------
+      // if-then-else
+      //-----------------------------------------------------------------------
       case "if-then-else":
+        
         if (node.condition) {
           let condition = node.condition.replace(/tkn\./g, 'cloneToken.')
           if (eval(condition)) {  // "3333+1" -> 3334
@@ -143,32 +149,45 @@ function execute(node, token) {
             return [undefined, cloneToken]
           }
         }
-
-
+        else if ("condition" in cloneToken){
+          if (eval(cloneToken.condition)) {  // "3333+1" -> 3334
+            return [cloneToken, undefined]
+          } else {
+            return [undefined, cloneToken]
+          }
+        }
+      //-----------------------------------------------------------------------
+      // add-change-attribute 
+      //-----------------------------------------------------------------------
+      case "change-attribute":
+        if (node.attribute&&node.value){
+          // cloneToken.node.attribut=eval((String(node.value.replace(/tkn\./g, 'cloneToken.'))))
+        }
+        return [cloneToken]
       //-----------------------------------------------------------------------
       // bsync
       //-----------------------------------------------------------------------
       case "bsync":
         let stmt = {}
         if (cloneToken.request) {
-          stmt.request = bp.Event(String(cloneToken.request))
+          stmt.request = bp.Event(eval((String(cloneToken.request.replace(/tkn\./g, 'cloneToken.')))))
           // delete cloneToken.request
         } else if (node.request != "") {
-          stmt.request = bp.Event(String(node.request))
+          stmt.request = bp.Event(eval(String(node.request.replace(/tkn\./g, 'cloneToken.'))))
         }
 
         if (cloneToken.waitFor) {
-          stmt.waitFor = bp.Event(String(cloneToken.waitFor))
+          stmt.waitFor = bp.Event(eval(String(cloneToken.waitFor.replace(/tkn\./g, 'cloneToken.'))))
           // delete cloneToken.waitFor
         } else if (node.waitFor != "") {
-          stmt.waitFor = bp.Event(String(node.waitFor))
+          stmt.waitFor = bp.Event(eval(String(node.waitFor.replace(/tkn\./g, 'cloneToken.'))))
         }
 
         if (cloneToken.block) {
-          stmt.block = bp.Event(String(cloneToken.block))
+          stmt.block = bp.Event(eval(String(cloneToken.block.replace(/tkn\./g, 'cloneToken.'))))
           // delete cloneToken.block
         } else if (node.block != "") {
-          stmt.block = bp.Event(String(node.block))
+          stmt.block = bp.Event(eval(String(node.block.replace(/tkn\./g, 'cloneToken.'))))
         }
 
         event = sync(stmt)
