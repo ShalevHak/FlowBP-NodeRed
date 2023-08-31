@@ -1,5 +1,5 @@
 /* global bp */
-
+bp.log.info("start")
 const RED = {};
 
 function cloneToken(token) {
@@ -24,17 +24,26 @@ for (let n of model.config.flows) {
   if (!disabledTabs.includes(n.z) && !n.d) {
     nodes.set(n.id, n)
     if (n.type == "start") {
+      bp.log.info("node is start")
       let token = n.payload || "{}";
+      bp.log.info("tkn:" + token)
       n.token = token;
+      bp.log.info("n: " + n)
       if (RED.nodeRedAdapter) {
-        let t =  JSON.parse(token);
-        // if (Array.isArray(t)){
-        //   for (let tkn of t){
-        //     RED.nodeRedAdapter.updateToken(n,tkn, true);
-        //   }
-        // }
-        // else 
-        RED.nodeRedAdapter.updateToken(n, t, true);
+        bp.log.info("RED.nodeRedAdapter")
+        let t = JSON.parse(token);
+        if (Array.isArray(t)) {
+          bp.log.info("is an arr: " + t)
+          for (let tkn of t) {
+            RED.nodeRedAdapter.updateToken(n, tkn, true);
+          }
+
+        }
+        else {
+          bp.log.info("is not an arr: " + t)
+          RED.nodeRedAdapter.updateToken(n, t, true);
+        }
+
       }
       starts.push(n);
     }
@@ -45,7 +54,15 @@ for (let n of model.config.flows) {
 //-------------------------------------------------------------------------------
 
 for (let n of starts) {
-  spawn_bthread(n, JSON.parse(n.token));
+  let token = JSON.parse(n.token) || {};
+  if (Array.isArray(token)) {
+    for (let tkn of token) {
+      spawn_bthread(n, tkn);
+    }
+  }
+  else {
+    spawn_bthread(n, token);
+  }
 }
 
 //-------------------------------------------------------------------------------
@@ -56,6 +73,7 @@ function spawn_bthread(node, token) {
     do {
       let tokens = execute(node, token) //[{sdfsdf},undefined]  [undefined,{sdfsdf}]
       if (RED.nodeRedAdapter) {
+        bp.log.info("75: RED.nodeRedAdapter")
         RED.nodeRedAdapter.updateToken(node, token, false);
       }
       token = undefined
@@ -120,19 +138,19 @@ function execute(node, token) {
         return [cloneToken]
 
       case "switch":
-        return switchNode(node,cloneToken)
+        return switchNode(node, cloneToken)
       case "log":
-        if(node.level === 'info')
+        if (node.level === 'info')
           bp.log.info(cloneToken)
-        else if(node.level === 'warn')
+        else if (node.level === 'warn')
           bp.log.warn(cloneToken)
-        if(node.level === 'fine')
+        if (node.level === 'fine')
           bp.log.fine(cloneToken)
         return []
       case "loop":
-        switch(node.type ){
+        switch (node.type) {
           case "numbers":
-          //todo: make "count" attribute unique
+            //todo: make "count" attribute unique
             if ("count" in cloneToken) {
               if (cloneToken.count + 1 < node.to) {
                 cloneToken.count += parseInt(node.skip)
@@ -148,7 +166,7 @@ function execute(node, token) {
           case "list":
             //todo: implement this.
             return [cloneToken, undefined]
-          }
+        }
 
       case "if-then-else":
         if (node.condition) {
@@ -160,11 +178,11 @@ function execute(node, token) {
           }
         }
       case "add-attribute":
-        if(node.value&&node.attribute){
-          eval("cloneToken."+node.attribute+"=" + node.value.replace(/tkn\./g, 'cloneToken.'))
+        if (node.value && node.attribute) {
+          eval("cloneToken." + node.attribute + "=" + node.value.replace(/tkn\./g, 'cloneToken.'))
         }
         return [cloneToken]
-      
+
       //-----------------------------------------------------------------------
       // bsync
       //-----------------------------------------------------------------------
@@ -192,43 +210,43 @@ function execute(node, token) {
         }
 
         event = sync(stmt)
-        cloneToken.selectedEvent = {name: String(event.name)}
+        cloneToken.selectedEvent = { name: String(event.name) }
         if (event.data != null) cloneToken.selectedEvent.data = event.data
         return [cloneToken]
       //-----------------------------------------------------------------------
       // wait all
       //-----------------------------------------------------------------------
-    
+
       case "waitall":
         let waitstmt = {};
-        if(! cloneToken.waitList){
-          if(node.waitList) 
-              cloneToken.waitList = eval(node.waitList.replace(/tkn\./g, 'cloneToken.'))
-          else 
+        if (!cloneToken.waitList) {
+          if (node.waitList)
+            cloneToken.waitList = eval(node.waitList.replace(/tkn\./g, 'cloneToken.'))
+          else
             return [cloneToken]
         }
 
-        do{
-        let arr = [];
-        for (let l of cloneToken.waitList )
+        do {
+          let arr = [];
+          for (let l of cloneToken.waitList)
             arr = arr.concat(l)
-        for (i in arr)
-          arr[i] = bp.Event(arr[i])
-        waitstmt.waitFor = arr
-        let event = sync(waitstmt)
-        cloneToken.selectedEvent = {name: String(event.name)}
-        if (event.data != null) cloneToken.selectedEvent.data = event.data
-        for (i in cloneToken.waitList){
-          if( cloneToken.waitList[i].includes(event.name))
-              cloneToken.waitList[i] =cloneToken.waitList[i].splice(cloneToken.waitList[i].indexOf(event.name),1) 
-        }
-            
-        } while(!cloneToken.waitList.includes([]))
+          for (i in arr)
+            arr[i] = bp.Event(arr[i])
+          waitstmt.waitFor = arr
+          let event = sync(waitstmt)
+          cloneToken.selectedEvent = { name: String(event.name) }
+          if (event.data != null) cloneToken.selectedEvent.data = event.data
+          for (i in cloneToken.waitList) {
+            if (cloneToken.waitList[i].includes(event.name))
+              cloneToken.waitList[i] = cloneToken.waitList[i].splice(cloneToken.waitList[i].indexOf(event.name), 1)
+          }
+
+        } while (!cloneToken.waitList.includes([]))
         return [cloneToken]
 
-          
+
       default:
-        if (this[node.type]) {  
+        if (this[node.type]) {
           this[node.type](node, cloneToken)
         } else {
           if (node.eventType == 'request') {
@@ -279,7 +297,7 @@ function defaultWaitForEventDef(node, msg) {
   }
   condition += ' })'
   // bp.log.info("condition="+condition)
-  let event = sync({waitFor: eval(condition)})
+  let event = sync({ waitFor: eval(condition) })
   copyEventDataToToken(msg, event)
 }
 
@@ -323,7 +341,7 @@ function defaultRequestEventDef(node, msg) {
 }
 
 function copyEventDataToToken(token, event) {
-  token.selectedEvent = {name: String(event.name)}
+  token.selectedEvent = { name: String(event.name) }
   if (event.data != null) {
     if (typeof event.data === 'object') {
       if (!token[event.name]) {
