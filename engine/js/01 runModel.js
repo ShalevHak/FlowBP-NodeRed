@@ -147,24 +147,35 @@ function execute(node, token) {
           bp.log.fine(cloneToken)
         return []
       case "loop":
-        switch (node.type) {
+        switch (node.loopover) {
           case "numbers":
-            //todo: make "count" attribute unique
-            if ("count" in cloneToken) {
-              if (cloneToken.count + 1 < node.to) {
-                cloneToken.count += parseInt(node.skip)
+            if (eval("cloneToken.count_"+node.id)!=null) {
+              if (eval("cloneToken.count_"+node.id) < node.to) {
+                eval("cloneToken.count_"+node.id  +"+="+parseInt(node.skip))
                 return [cloneToken, undefined]
               } else {
-                delete cloneToken.count
+                eval("cloneToken.count_"+node.id+"="+null)//Deleting the unique count attribute after exiting the loop
                 return [undefined, cloneToken]
               }
             } else {
-              cloneToken.count = parseInt(node.from)
+              eval("cloneToken.count_"+node.id + "=" +parseInt(node.from))//Adding a unique count attribute named after the node's id
               return [cloneToken, undefined]
             }
           case "list":
-            //todo: implement this.
-            return [cloneToken, undefined]
+            if (eval("cloneToken.element_"+node.id)!=null) {
+              if (eval("cloneToken.list_"+node.id).length>1) {
+                  eval("cloneToken.list_"+node.id).splice(0,1)//Deletes the first element of the list
+                  eval("cloneToken.element_"+node.id+"="+eval("cloneToken.list_"+node.id)[0])//Sets the element as the new first element
+                return [cloneToken, undefined]
+              } else {
+                eval("cloneToken.element_"+node.id+"="+null)//Deleting the unique element attribute after exiting the loop
+                return [undefined, cloneToken]
+              }
+            } else {
+              eval("cloneToken.list_"+node.id+"="+node.list)
+              eval("cloneToken.element_"+node.id+"="+eval(node.list)[0])//Adding a unique element attribute named after the node's id
+              return [cloneToken, undefined]
+            }
         }
 
       case "if-then-else":
