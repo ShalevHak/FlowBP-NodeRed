@@ -6,9 +6,9 @@ function cloneToken(token) {
   // return JSON.parse(JSON.stringify(token))
   return token
 }
-// function autoEval(att){
-//   return eval(`node.${att}.replace(/tkn\./g, 'cloneToken.')`)
-// }
+function autoEval(att){
+  return eval(`node.${att}.replace(/tkn\./g, 'cloneToken.')`)
+}
 var nodes = new Map();
 var starts = [];
 var disabledTabs = [];
@@ -24,27 +24,27 @@ for (let n of model.config.flows) {
   if (!disabledTabs.includes(n.z) && !n.d) {
     nodes.set(n.id, n)
     if (n.type == "start") {
-      bp.log.info("node is start")
+      // bp.log.info("node is start")
       let token = n.payload || "{}";
-      bp.log.info("tkn:" + token)
+      // bp.log.info("tkn:" + token)
       n.token = token;
-      bp.log.info("n: " + n)
-      if (RED.nodeRedAdapter) {
-        bp.log.info("RED.nodeRedAdapter")
-        let t = JSON.parse(token);
-        if (Array.isArray(t)) {
-          bp.log.info("is an arr: " + t)
-          for (let tkn of t) {
-            RED.nodeRedAdapter.updateToken(n, tkn, true);
-          }
+      // bp.log.info("n: " + n)
+      // if (RED.nodeRedAdapter) {
+      //   bp.log.info("RED.nodeRedAdapter")
+      //   let t = JSON.parse(token);
+      //   if (Array.isArray(t)) {
+      //     bp.log.info("is an arr: " + t)
+      //     for (let tkn of t) {
+      //       RED.nodeRedAdapter.updateToken(n, tkn, true);
+      //     }
 
-        }
-        else {
-          bp.log.info("is not an arr: " + t)
-          RED.nodeRedAdapter.updateToken(n, t, true);
-        }
+      //   }
+      //   else {
+      //     bp.log.info("is not an arr: " + t)
+      //     RED.nodeRedAdapter.updateToken(n, t, true);
+      //   }
 
-      }
+      // }
       starts.push(n);
     }
   }
@@ -73,7 +73,6 @@ function spawn_bthread(node, token) {
     do {
       let tokens = execute(node, token) //[{sdfsdf},undefined]  [undefined,{sdfsdf}]
       if (RED.nodeRedAdapter) {
-        bp.log.info("75: RED.nodeRedAdapter")
         RED.nodeRedAdapter.updateToken(node, token, false);
       }
       token = undefined
@@ -216,7 +215,6 @@ function execute(node, token) {
       //-----------------------------------------------------------------------
       // wait all
       //-----------------------------------------------------------------------
-
       case "waitall":
         let waitstmt = {};
         if (!cloneToken.waitList) {
@@ -225,7 +223,7 @@ function execute(node, token) {
           else
             return [cloneToken]
         }
-
+        var flag=true;
         do {
           let arr = [];
           for (let l of cloneToken.waitList)
@@ -238,10 +236,17 @@ function execute(node, token) {
           if (event.data != null) cloneToken.selectedEvent.data = event.data
           for (i in cloneToken.waitList) {
             if (cloneToken.waitList[i].includes(event.name))
-              cloneToken.waitList[i] = cloneToken.waitList[i].splice(cloneToken.waitList[i].indexOf(event.name), 1)
+              {
+                cloneToken.waitList[i].splice(cloneToken.waitList[i].indexOf(event.name), cloneToken.waitList[i].indexOf(event.name)+1)
+                // bp.log.info("splice: "+event.name+cloneToken.waitList[i])
+                if(cloneToken.waitList[i].length==0){
+                  flag=false;
+                }
+              }
+            
           }
 
-        } while (!cloneToken.waitList.includes([]))
+        } while (flag)
         return [cloneToken]
 
 
