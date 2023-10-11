@@ -1,7 +1,38 @@
 /* global bp */
 bp.log.info("start")
 const RED = {};
+function processPayload(payload) {//processing the payload from 'start' nodes. Enabling loop comprehension to define array of tokens
+  if (typeof payload === 'string') {
+    // Split the payload into parts
+    const parts = payload.split(" for ");
+    
+    if (parts.length === 2) {
+      const objectStr = parts[0].trim();
+      const iterationStr = parts[1].trim().split(" of ");
+      
+      if (iterationStr.length === 2) {
+        const variableName = iterationStr[0].trim();
+        const arrayStr = iterationStr[1].trim();
 
+        // Evaluate the array expression
+        const array = eval(arrayStr);
+
+        if (Array.isArray(array)) {
+          // Create an array of objects using the provided expression
+          const result = array.map(item => {
+            const objStrWithVar = objectStr.replace(new RegExp(variableName, 'g'), JSON.stringify(item));
+            return objStrWithVar;
+          });
+
+          return "["+result+"]";
+        }
+      }
+    }
+  }
+
+  // If the payload doesn't match the specified format, return it as is
+  return payload;
+}
 function cloneToken(token) {
   // return JSON.parse(JSON.stringify(token))
   return token
@@ -9,6 +40,10 @@ function cloneToken(token) {
 function autoEval(att){
   return eval(`node.${att}.replace(/tkn\./g, 'cloneToken.')`)
 }
+bp.log.info("unprocessed example:" + ('{"x": i} for i of [1, 2, 3]'))
+
+bp.log.info("processed example:" + processPayload('{"x": i} for i of [1, 2, 3]'))
+
 var nodes = new Map();
 var starts = [];
 var disabledTabs = [];
@@ -25,8 +60,9 @@ for (let n of model.config.flows) {
     nodes.set(n.id, n)
     if (n.type == "start") {
       // bp.log.info("node is start")
-      let token = n.payload || "{}";
-      // bp.log.info("tkn:" + token)
+      bp.log.info("unprocessed: "+eval(n.payload))
+      bp.log.info("processed payload: "+processPayload(eval(n.payload)))
+      let token = processPayload(eval(n.payload)) || "{}";
       n.token = token;
       // bp.log.info("n: " + n)
       // if (RED.nodeRedAdapter) {
@@ -187,7 +223,7 @@ function execute(node, token) {
             return [undefined, cloneToken]
           }
         }
-      case "add-attribute":
+      case "set-attribute":
         if (node.value && node.attribute) {
           eval("cloneToken." + node.attribute + "=" + node.value.replace(/tkn\./g, 'cloneToken.'))
         }
@@ -196,27 +232,28 @@ function execute(node, token) {
       //-----------------------------------------------------------------------
       // bsync
       //-----------------------------------------------------------------------
+      //todo: implement bSync of array of events
       case "bsync":
         let stmt = {}
         if (cloneToken.request) {
           stmt.request = bp.Event(String(cloneToken.request))
           // delete cloneToken.request
         } else if (node.request != "") {
-          stmt.request = bp.Event(String(eval(node.request.replace(/tkn\./g, 'cloneToken.'))))
+          stmt.request = bp.Event(String(eval(""+processPayload(node.request.replace(/tkn\./g, 'cloneToken.')))))
         }
 
         if (cloneToken.waitFor) {
           stmt.waitFor = bp.Event(String(cloneToken.waitFor))
           // delete cloneToken.waitFor
         } else if (node.waitFor != "") {
-          stmt.waitFor = bp.Event(String(eval(node.waitFor.replace(/tkn\./g, 'cloneToken.'))))
+          stmt.waitFor = bp.Event(String(eval(""+processPayload(node.waitFor.replace(/tkn\./g, 'cloneToken.')))))
         }
 
         if (cloneToken.block) {
           stmt.block = bp.Event(String(cloneToken.block))
           // delete cloneToken.block
         } else if (node.block != "") {
-          stmt.block = bp.Event(String(eval(node.block.replace(/tkn\./g, 'cloneToken.'))))
+          stmt.block = bp.Event(String(eval(""+processPayload(node.block.replace(/tkn\./g, 'cloneToken.')))))
         }
 
         event = sync(stmt)
