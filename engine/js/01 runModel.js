@@ -1,37 +1,46 @@
 /* global bp */
 bp.log.info("start")
 const RED = {};
+//todo: fix bugs
 function processPayload(payload) {//processing the payload from 'start' nodes. Enabling loop comprehension to define array of tokens
-  if (typeof payload === 'string') {
-    // Split the payload into parts
-    const parts = payload.split(" for ");
+  // Split the payload into parts
+  const parts = payload.split(" for ");
+  if (parts.length === 2) {
+    const objectStr = parts[0].trim();
+    const iterationStr = parts[1].trim().split(" of ");
     
-    if (parts.length === 2) {
-      const objectStr = parts[0].trim();
-      const iterationStr = parts[1].trim().split(" of ");
-      
-      if (iterationStr.length === 2) {
-        const variableName = iterationStr[0].trim();
-        const arrayStr = iterationStr[1].trim();
+    if (iterationStr.length === 2) {
+      const variableName = iterationStr[0].trim();
+      const arrayStr = iterationStr[1].trim();
 
-        // Evaluate the array expression
-        const array = eval(arrayStr);
+      // Evaluate the array expression
+      const array = eval(arrayStr);
 
-        if (Array.isArray(array)) {
-          // Create an array of objects using the provided expression
-          const result = array.map(item => {
-            const objStrWithVar = objectStr.replace(new RegExp(variableName, 'g'), JSON.stringify(item));
-            return objStrWithVar;
-          });
+      if (Array.isArray(array)) {
+        // Create an array of objects using the provided expression
+        const result = array.map(item => {
+          const objStrWithVar = objectStr.replace(new RegExp(variableName, 'g'), JSON.stringify(item))
+          return objStrWithVar;
+        })
 
-          return "["+result+"]";
-        }
+        return "["+result+"]"
       }
     }
   }
-
   // If the payload doesn't match the specified format, return it as is
   return payload;
+}
+function processEvent(event, cloneToken){
+  let e = eval(processPayload(event.replace(/tkn\./g, 'cloneToken.')))
+
+  if (Array.isArray(e)){
+    let eventsArr =[]
+    for (var i=0;i<e.length;i++){
+      eventsArr.push(bp.Event(String(e[i])))
+    }
+    return eventsArr
+  }
+  return bp.Event(String(e))
 }
 function cloneToken(token) {
   // return JSON.parse(JSON.stringify(token))
@@ -40,9 +49,7 @@ function cloneToken(token) {
 function autoEval(att){
   return eval(`node.${att}.replace(/tkn\./g, 'cloneToken.')`)
 }
-bp.log.info("unprocessed example:" + ('{"x": i} for i of [1, 2, 3]'))
 
-bp.log.info("processed example:" + processPayload('{"x": i} for i of [1, 2, 3]'))
 
 var nodes = new Map();
 var starts = [];
@@ -60,9 +67,9 @@ for (let n of model.config.flows) {
     nodes.set(n.id, n)
     if (n.type == "start") {
       // bp.log.info("node is start")
-      bp.log.info("unprocessed: "+eval(n.payload))
-      bp.log.info("processed payload: "+processPayload(eval(n.payload)))
-      let token = processPayload(eval(n.payload)) || "{}";
+      // bp.log.info("unprocessed: "+eval(n.payload))
+      // bp.log.info("processed payload: "+processPayload(eval(n.payload)))
+      let token = processPayload(n.payload)|| "{}";
       n.token = token;
       // bp.log.info("n: " + n)
       // if (RED.nodeRedAdapter) {
@@ -184,6 +191,7 @@ function execute(node, token) {
         return []
       case "loop":
         switch (node.loopover) {
+          
           case "numbers":
             if (eval("cloneToken.count_"+node.id)!=null) {
               if (eval("cloneToken.count_"+node.id) < node.to) {
@@ -198,18 +206,18 @@ function execute(node, token) {
               return [cloneToken, undefined]
             }
           case "list":
-            if (eval("cloneToken.element_"+node.id)!=null) {
+            if (eval("cloneToken.count_"+node.id)!=null) {
               if (eval("cloneToken.list_"+node.id).length>1) {
                   eval("cloneToken.list_"+node.id).splice(0,1)//Deletes the first element of the list
-                  eval("cloneToken.element_"+node.id+"="+eval("cloneToken.list_"+node.id)[0])//Sets the element as the new first element
+                  eval("cloneToken.count_"+node.id+"="+eval("cloneToken.list_"+node.id)[0])//Sets the element as the new first element
                 return [cloneToken, undefined]
               } else {
-                eval("cloneToken.element_"+node.id+"="+null)//Deleting the unique element attribute after exiting the loop
+                eval("cloneToken.count_"+node.id+"="+null)//Deleting the unique element attribute after exiting the loop
                 return [undefined, cloneToken]
               }
             } else {
               eval("cloneToken.list_"+node.id+"="+node.list)
-              eval("cloneToken.element_"+node.id+"="+eval(node.list)[0])//Adding a unique element attribute named after the node's id
+              eval("cloneToken.count_"+node.id+"="+eval(node.list)[0])//Adding a unique element attribute named after the node's id
               return [cloneToken, undefined]
             }
         }
@@ -235,25 +243,26 @@ function execute(node, token) {
       //todo: implement bSync of array of events
       case "bsync":
         let stmt = {}
+        
         if (cloneToken.request) {
-          stmt.request = bp.Event(String(cloneToken.request))
-          // delete cloneToken.request
+          stmt.request = processEvent(cloneToken.request,cloneToken)
+          cloneToken.request = null;
         } else if (node.request != "") {
-          stmt.request = bp.Event(String(eval(""+processPayload(node.request.replace(/tkn\./g, 'cloneToken.')))))
+          stmt.request = processEvent(node.request,cloneToken)
         }
 
         if (cloneToken.waitFor) {
-          stmt.waitFor = bp.Event(String(cloneToken.waitFor))
-          // delete cloneToken.waitFor
+          stmt.waitFor = processEvent(cloneToken.waitFor,cloneToken)
+          cloneToken.waitFor = null;
         } else if (node.waitFor != "") {
-          stmt.waitFor = bp.Event(String(eval(""+processPayload(node.waitFor.replace(/tkn\./g, 'cloneToken.')))))
+          stmt.waitFor = processEvent(node.waitFor,cloneToken)
         }
 
         if (cloneToken.block) {
-          stmt.block = bp.Event(String(cloneToken.block))
-          // delete cloneToken.block
+          stmt.block = processEvent(cloneToken.block,cloneToken)
+          cloneToken.block = null;
         } else if (node.block != "") {
-          stmt.block = bp.Event(String(eval(""+processPayload(node.block.replace(/tkn\./g, 'cloneToken.')))))
+          stmt.block = processEvent(node.block)
         }
 
         event = sync(stmt)
