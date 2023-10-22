@@ -1,8 +1,7 @@
 /* global bp */
 bp.log.info("start")
 const RED = {};
-//todo: fix bugs
-function processPayload(payload) {//processing the payload from 'start' nodes. Enabling loop comprehension to define array of tokens
+function processPayload(payload, cloneToken) {//processing the payload from 'start' nodes. Enabling loop comprehension to define array of tokens
   // Split the payload into parts
   const parts = payload.split(" for ");
   if (parts.length === 2) {
@@ -12,10 +11,8 @@ function processPayload(payload) {//processing the payload from 'start' nodes. E
     if (iterationStr.length === 2) {
       const variableName = iterationStr[0].trim();
       const arrayStr = iterationStr[1].trim();
-
       // Evaluate the array expression
       const array = eval(arrayStr);
-
       if (Array.isArray(array)) {
         // Create an array of objects using the provided expression
         const result = array.map(item => {
@@ -31,8 +28,7 @@ function processPayload(payload) {//processing the payload from 'start' nodes. E
   return payload;
 }
 function processEvent(event, cloneToken){
-  let e = eval(processPayload(event.replace(/tkn\./g, 'cloneToken.')))
-
+  let e = eval(processPayload(event.replace(/tkn\./g, 'cloneToken.'), cloneToken))
   if (Array.isArray(e)){
     let eventsArr =[]
     for (var i=0;i<e.length;i++){
@@ -190,34 +186,40 @@ function execute(node, token) {
           bp.log.fine(cloneToken)
         return []
       case "loop":
-        switch (node.loopover) {
-          
+        
+        let counterVarName="count_"+node.id
+        if(node.varName){
+          counterVarName=node.varName
+        }
+        switch (node.loopOver) {
           case "numbers":
-            if (eval("cloneToken.count_"+node.id)!=null) {
-              if (eval("cloneToken.count_"+node.id) < node.to) {
-                eval("cloneToken.count_"+node.id  +"+="+parseInt(node.skip))
+            if (eval("cloneToken."+counterVarName)!=null) {
+              if (eval("cloneToken."+counterVarName) < node.to) {
+                eval("cloneToken."+counterVarName  +"+="+parseInt(node.skip))
                 return [cloneToken, undefined]
               } else {
-                eval("cloneToken.count_"+node.id+"="+null)//Deleting the unique count attribute after exiting the loop
+                eval("cloneToken."+counterVarName+"="+null)//Deleting the unique count attribute after exiting the loop
                 return [undefined, cloneToken]
               }
             } else {
-              eval("cloneToken.count_"+node.id + "=" +parseInt(node.from))//Adding a unique count attribute named after the node's id
+              eval("cloneToken."+counterVarName + "=" +parseInt(node.from))//Adding a unique count attribute named after the node's id
               return [cloneToken, undefined]
             }
           case "list":
-            if (eval("cloneToken.count_"+node.id)!=null) {
-              if (eval("cloneToken.list_"+node.id).length>1) {
-                  eval("cloneToken.list_"+node.id).splice(0,1)//Deletes the first element of the list
-                  eval("cloneToken.count_"+node.id+"="+eval("cloneToken.list_"+node.id)[0])//Sets the element as the new first element
+            if (eval("cloneToken."+counterVarName)!=null) {
+              if (eval("cloneToken.list_"+counterVarName).length>1) {
+                  eval("cloneToken.list_"+counterVarName+".splice(0,1)")//Deletes the first element of the list
+                  eval("cloneToken."+counterVarName+"="+"cloneToken.list_"+counterVarName+"[0]")//Sets the element as the new first element
                 return [cloneToken, undefined]
               } else {
-                eval("cloneToken.count_"+node.id+"="+null)//Deleting the unique element attribute after exiting the loop
+                eval("cloneToken."+counterVarName+"="+null)//Deleting the unique element attribute after exiting the loop
+                
                 return [undefined, cloneToken]
               }
-            } else {
-              eval("cloneToken.list_"+node.id+"="+node.list)
-              eval("cloneToken.count_"+node.id+"="+eval(node.list)[0])//Adding a unique element attribute named after the node's id
+            }
+            else {
+              eval("cloneToken.list_"+counterVarName+"="+processPayload(node.list.replace(/tkn\./g, 'cloneToken.'),cloneToken))
+              eval("cloneToken."+counterVarName+"="+processPayload(node.list.replace(/tkn\./g, 'cloneToken.'),cloneToken)+"[0]")//Adding a unique element attribute named after the node's id
               return [cloneToken, undefined]
             }
         }
@@ -232,15 +234,15 @@ function execute(node, token) {
           }
         }
       case "set-attribute":
+        
         if (node.value && node.attribute) {
-          eval("cloneToken." + node.attribute + "=" + node.value.replace(/tkn\./g, 'cloneToken.'))
+          eval("cloneToken." + node.attribute + "=" + (processPayload(node.value.replace(/tkn\./g, 'cloneToken.'),cloneToken)))
         }
         return [cloneToken]
 
       //-----------------------------------------------------------------------
       // bsync
       //-----------------------------------------------------------------------
-      //todo: implement bSync of array of events
       case "bsync":
         let stmt = {}
         
@@ -262,7 +264,7 @@ function execute(node, token) {
           stmt.block = processEvent(cloneToken.block,cloneToken)
           cloneToken.block = null;
         } else if (node.block != "") {
-          stmt.block = processEvent(node.block)
+          stmt.block = processEvent(node.block,cloneToken)
         }
 
         event = sync(stmt)
@@ -276,9 +278,18 @@ function execute(node, token) {
         let waitstmt = {};
         if (!cloneToken.waitList) {
           if (node.waitList)
-            cloneToken.waitList = eval(node.waitList.replace(/tkn\./g, 'cloneToken.'))
+            cloneToken.waitList = eval(processPayload(node.waitList.replace(/tkn\./g, 'cloneToken.'),cloneToken))//process payload
           else
             return [cloneToken]
+        }
+        let isNotArr=false;
+        for (let l of cloneToken.waitList){
+          if(!Array.isArray(l)){
+            isNotArr=true
+          }
+        }
+        if(isNotArr){
+          cloneToken.waitList=[cloneToken.waitList]
         }
         var flag=true;
         do {
