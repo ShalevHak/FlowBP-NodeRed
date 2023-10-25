@@ -65,7 +65,8 @@ for (let n of model.config.flows) {
       // bp.log.info("node is start")
       // bp.log.info("unprocessed: "+eval(n.payload))
       // bp.log.info("processed payload: "+processPayload(eval(n.payload)))
-      let token = processPayload(n.payload)|| "{}";
+      let payload=n.payload||"{}"
+      let token = processPayload(payload)
       n.token = token;
       // bp.log.info("n: " + n)
       // if (RED.nodeRedAdapter) {
@@ -302,12 +303,18 @@ function execute(node, token) {
           let event = sync(waitstmt)
           cloneToken.selectedEvent = { name: String(event.name) }
           if (event.data != null) cloneToken.selectedEvent.data = event.data
-          for (i in cloneToken.waitList) {
-            if (cloneToken.waitList[i].includes(event.name))
+          for (let i of cloneToken.waitList) {
+            bp.log.info(i)
+            if (i.includes(event.name))
               {
-                cloneToken.waitList[i].splice(cloneToken.waitList[i].indexOf(event.name), cloneToken.waitList[i].indexOf(event.name)+1)
-                // bp.log.info("splice: "+event.name+cloneToken.waitList[i])
-                if(cloneToken.waitList[i].length==0){
+                i.splice(i.indexOf(event.name), 1)
+                // let I =cloneToken.waitList[i].indexOf(event.name)
+                // cloneToken.waitList[i] = cloneToken.waitList[i].filter(function(item, index) {
+                //   return index !== I;
+                // });
+                let l=i.length
+                // bp.log.info(cloneToken.waitList[i] +": "+ l)
+                if(l==0){
                   flag=false;
                 }
               }
