@@ -1,13 +1,25 @@
 /* global bp */
 bp.log.info("start")
 const RED = {};
-function processPayload(payload, cloneToken) {//processing the payload from 'start' nodes. Enabling loop comprehension to define array of tokens
+/**
+ * Convert a string to an object or an array. 
+ * The string can be of the form of JavaScript code or of the syntax: '{num:i,age: tkn.age} for i of tkn.arr'.
+ * The function can be called with out the tkn parameter e.g. in the case of start nodes, in which the string cannot contain the tkn.
+ * 
+ * @param {string} payload - a text inputed by the user in some field representing an object or an array of objects
+ * @param {object} tkn - the token that the user can refer to.
+ * @returns {object} or {array} result
+ */
+function processPayload(payload, tkn) {
+
+  if (typeof payload !== 'string') throw new Error("processPayload assumes a string")
+
   // Split the payload into parts
   const parts = payload.split(" for ");
   if (parts.length === 2) {
     const objectStr = parts[0].trim();
     const iterationStr = parts[1].trim().split(" of ");
-    
+
     if (iterationStr.length === 2) {
       const variableName = iterationStr[0].trim();
       const arrayStr = iterationStr[1].trim();
@@ -15,35 +27,36 @@ function processPayload(payload, cloneToken) {//processing the payload from 'sta
       const array = eval(arrayStr);
       if (Array.isArray(array)) {
         // Create an array of objects using the provided expression
-        const result = array.map(item => {
-          const objStrWithVar = objectStr.replace(new RegExp(variableName, 'g'), JSON.stringify(item))
-          return objStrWithVar;
-        })
-
-        return "["+result+"]"
+        const arrayMap = '[' + array + '].map(' + variableName + ' => (' + objectStr + '))'
+        const result = eval(arrayMap)
+        return result
       }
     }
   }
-  // If the payload doesn't match the specified format, return it as is
-  return payload;
+  // If the payload doesn't match the specified format, use eval and return
+  return eval(payload);
 }
-function processEvent(event, cloneToken){
-  let e = eval(processPayload(event.replace(/tkn\./g, 'cloneToken.'), cloneToken))
-  if (Array.isArray(e)){
-    let eventsArr =[]
-    for (var i=0;i<e.length;i++){
+function processEvent(event, tkn) {
+  let e = processPayload(event, tkn)
+  if (Array.isArray(e)) {
+    let eventsArr = []
+    for (var i = 0; i < e.length; i++) {
       eventsArr.push(bp.Event(String(e[i])))
     }
     return eventsArr
   }
   return bp.Event(String(e))
 }
-function cloneToken(token) {
-  // return JSON.parse(JSON.stringify(token))
-  return token
+function GetAttribute(att, Token) {
+  return Token[att]
 }
-function autoEval(att){
-  return eval(`node.${att}.replace(/tkn\./g, 'cloneToken.')`)
+function SetAttribute(att, value, Token) {
+  Token[att] = value
+}
+function GetTknAtt(str, Token) {
+  const pattern = /tkn\.(\w+)/g;
+  const resultString = str.replace(pattern, (match, p1) => Token[p1]);
+  return resultString;
 }
 
 
@@ -65,10 +78,9 @@ for (let n of model.config.flows) {
       // bp.log.info("node is start")
       // bp.log.info("unprocessed: "+eval(n.payload))
       // bp.log.info("processed payload: "+processPayload(eval(n.payload)))
-      let payload=n.payload||"{}"
-      let token = processPayload(payload)
+      let payload = n.payload || "{}"
+      let token = processPayload(payload)/*eval(payload)*/
       n.token = token;
-      // bp.log.info("n: " + n)
       // if (RED.nodeRedAdapter) {
       //   bp.log.info("RED.nodeRedAdapter")
       //   let t = JSON.parse(token);
@@ -94,7 +106,7 @@ for (let n of model.config.flows) {
 //-------------------------------------------------------------------------------
 
 for (let n of starts) {
-  let token = JSON.parse(n.token) || {};
+  let token = n.token || {};
   if (Array.isArray(token)) {
     for (let tkn of token) {
       spawn_bthread(n, tkn);
@@ -148,7 +160,7 @@ function spawn_bthread(node, token) {
 
 //-------------------------------------------------------------------------------
 function execute(node, token) {
-  let cloneToken = JSON.parse(JSON.stringify(token))
+  let tkn = JSON.parse(JSON.stringify(token))
   let event;
   let block = [];
   let waitFor = [];
@@ -174,168 +186,188 @@ function execute(node, token) {
       // Start
       //-----------------------------------------------------------------------
       case "start":
-        return [cloneToken]
+        return [tkn]
 
       case "switch":
-        return switchNode(node, cloneToken)
+        return switchNode(node, tkn)
       case "log":
         if (node.level === 'info')
-          bp.log.info(cloneToken)
+          bp.log.info(tkn)
         else if (node.level === 'warn')
-          bp.log.warn(cloneToken)
+          bp.log.warn(tkn)
         if (node.level === 'fine')
-          bp.log.fine(cloneToken)
+          bp.log.fine(tkn)
         return []
       case "loop":
-        
-        let counterVarName="count_"+node.id
-        if(node.varName){
-          counterVarName=node.varName
+
+        let counterVarName = "count_" + node.id
+        if (node.varName) {
+          counterVarName = node.varName
         }
+
         switch (node.loopOver) {
+
           case "numbers":
-            if (eval("cloneToken."+counterVarName)!=null) {
-              if (eval("cloneToken."+counterVarName) < node.to) {
-                eval("cloneToken."+counterVarName  +"+="+parseInt(node.skip))
-                return [cloneToken, undefined]
+            if (eval("tkn."+counterVarName+"!= null")) {
+              if (eval("tkn."+counterVarName+"+ < node.to")) {
+                eval("tkn."+counterVarName +"+= parseInt(node.skip)")
+                return [tkn, undefined]
               } else {
-                eval("cloneToken."+counterVarName+"="+null)//Deleting the unique count attribute after exiting the loop
-                return [undefined, cloneToken]
+                eval("tkn."+counterVarName+" = null")//Deleting the unique count attribute after exiting the loop
+                return [undefined, tkn]
               }
             } else {
-              eval("cloneToken."+counterVarName + "=" +parseInt(node.from))//Adding a unique count attribute named after the node's id
-              return [cloneToken, undefined]
+              eval("tkn." + counterVarName + "=" + parseInt(node.from))//Adding a unique count attribute named after the node's id
+              return [tkn, undefined]
             }
           case "list":
-            if (eval("cloneToken."+counterVarName)!=null) {
-              if (eval("cloneToken.list_"+counterVarName).length>1) {
-                  eval("cloneToken.list_"+counterVarName+".splice(0,1)")//Deletes the first element of the list
-                  eval("cloneToken."+counterVarName+"="+"cloneToken.list_"+counterVarName+"[0]")//Sets the element as the new first element
-                return [cloneToken, undefined]
+            if (eval("tkn."+counterVarName+"!= null")) {
+              if (eval("tkn.list_" + counterVarName+".length > 1")) {//Todo: remove eval
+                eval("tkn.list_" + counterVarName + ".splice(0,1)")//Deletes the first element of the list
+                eval("tkn." + counterVarName + "=" + "tkn.list_" + counterVarName + "[0]")//Sets the element as the new first element
+                return [tkn, undefined]
               } else {
-                eval("cloneToken."+counterVarName+"="+null)//Deleting the unique element attribute after exiting the loop
-                
-                return [undefined, cloneToken]
+                eval("tkn." + counterVarName + "=" + null)//Deleting the unique element attribute after exiting the loop
+
+                return [undefined, tkn]
               }
             }
             else {
-              eval("cloneToken.list_"+counterVarName+"="+processPayload(node.list.replace(/tkn\./g, 'cloneToken.'),cloneToken))
-              eval("cloneToken."+counterVarName+"="+processPayload(node.list.replace(/tkn\./g, 'cloneToken.'),cloneToken)+"[0]")//Adding a unique element attribute named after the node's id
-              return [cloneToken, undefined]
+              let list = processPayload(node.list, tkn)
+              eval("tkn.list_" + counterVarName + "=" + list)
+              eval("tkn." + counterVarName + "=" + list + "[0]")//Adding a unique element attribute named after the node's id
+              return [tkn, undefined]
             }
         }
 
       case "if-then-else":
         if (node.condition) {
-          let condition = node.condition.replace(/tkn\./g, 'cloneToken.')
-          if (eval(condition)) {  // "3333+1" -> 3334
-            return [cloneToken, undefined]
+          if (eval(node.condition)) {  // "3333+1" -> 3334
+            return [tkn, undefined]
           } else {
-            return [undefined, cloneToken]
+            return [undefined, tkn]
           }
         }
       case "set-attribute":
-        
+
         if (node.value && node.attribute) {
-          eval("cloneToken." + node.attribute + "=" + (processPayload(node.value.replace(/tkn\./g, 'cloneToken.'),cloneToken)))
+          try{
+            eval("tkn." + node.attribute + "=" + (processPayload(node.value,tkn)))
+          }
+          catch(err){
+            bp.log.info("error: "+err+"\n"+"Node id: "+node.id+"\n Evaluated string: "+"tkn." + node.attribute + "=" + (processPayload(node.value,tkn))
+            +"\n Original code: "+node.value);
+          }
         }
-        return [cloneToken]
+        return [tkn]
 
       //-----------------------------------------------------------------------
       // bsync
       //-----------------------------------------------------------------------
       case "bsync":
         let stmt = {}
-        
-        if (cloneToken.request) {
-          stmt.request = processEvent(cloneToken.request,cloneToken)
-          cloneToken.request = null;
+        if (node.priority) {
+          tkn.priority = eval(node.priority)
+        }
+        else {
+          tkn.priority = Infinity
+        }
+        if (tkn.request) {
+          stmt.request = processEvent(tkn.request, tkn)
+          tkn.request = null;
         } else if (node.request != "") {
-          stmt.request = processEvent(node.request,cloneToken)
+          stmt.request = processEvent(node.request, tkn)
         }
 
-        if (cloneToken.waitFor) {
-          stmt.waitFor = processEvent(cloneToken.waitFor,cloneToken)
-          cloneToken.waitFor = null;
+        if (tkn.waitFor) {
+          stmt.waitFor = processEvent(tkn.waitFor, tkn)
+          tkn.waitFor = null;
         } else if (node.waitFor != "") {
-          stmt.waitFor = processEvent(node.waitFor,cloneToken)
+          stmt.waitFor = processEvent(node.waitFor, tkn)
         }
 
-        if (cloneToken.block) {
-          stmt.block = processEvent(cloneToken.block,cloneToken)
-          cloneToken.block = null;
+        if (tkn.block) {
+          stmt.block = processEvent(tkn.block, tkn)
+          tkn.block = null;
         } else if (node.block != "") {
-          stmt.block = processEvent(node.block,cloneToken)
+          stmt.block = processEvent(node.block, tkn)
         }
 
-        event = sync(stmt)
-        cloneToken.selectedEvent = { name: String(event.name) }
-        if (event.data != null) cloneToken.selectedEvent.data = event.data
-        return [cloneToken]
+        event = sync(stmt, -tkn.priority)
+        tkn.selectedEvent = { name: String(event.name) }
+        if (event.data != null) tkn.selectedEvent.data = event.data
+        return [tkn]
       //-----------------------------------------------------------------------
       // wait all
       //-----------------------------------------------------------------------
       case "waitall":
-        let waitstmt = {};
-        if (!cloneToken.waitList) {
-          if (node.waitList)
-            cloneToken.waitList = eval(processPayload(node.waitList.replace(/tkn\./g, 'cloneToken.'),cloneToken))//process payload
+
+        if (!tkn.waitList) {
+          if (node.waitList) {
+            let code = processPayload(node.waitList, tkn)
+            try {
+              tkn.waitList = eval(code)//process payload
+            }
+            catch (error) {
+              bp.log.warn("Error in: " + code + "  (" + error + ")")
+            }
+          }
+
           else
-            return [cloneToken]
+            return [tkn]
         }
-        let isNotArr=false;
-        for (let l of cloneToken.waitList){
-          if(!Array.isArray(l)){
-            isNotArr=true
+        let isNotArr = false;
+        for (let l of tkn.waitList) {
+          if (!Array.isArray(l)) {
+            isNotArr = true
           }
         }
-        if(isNotArr){
-          cloneToken.waitList=[cloneToken.waitList]
+        if (isNotArr) {
+          tkn.waitList = [tkn.waitList]
         }
-        var flag=true;
+        let waitstmt = {};
+        var flag = true;
         do {
           let arr = [];
-          for (let l of cloneToken.waitList)
+          for (let l of tkn.waitList)
             arr = arr.concat(l)
           for (i in arr)
             arr[i] = bp.Event(arr[i])
           waitstmt.waitFor = arr
           let event = sync(waitstmt)
-          cloneToken.selectedEvent = { name: String(event.name) }
-          if (event.data != null) cloneToken.selectedEvent.data = event.data
-          for (let i of cloneToken.waitList) {
-            bp.log.info(i)
-            if (i.includes(event.name))
-              {
-                i.splice(i.indexOf(event.name), 1)
-                // let I =cloneToken.waitList[i].indexOf(event.name)
-                // cloneToken.waitList[i] = cloneToken.waitList[i].filter(function(item, index) {
-                //   return index !== I;
-                // });
-                let l=i.length
-                // bp.log.info(cloneToken.waitList[i] +": "+ l)
-                if(l==0){
-                  flag=false;
-                }
+          tkn.selectedEvent = { name: String(event.name) }
+          if (event.data != null) tkn.selectedEvent.data = event.data
+          for (let i of tkn.waitList) {
+            bp.log.fine(i)
+            if (i.includes(event.name)) {
+              i.splice(i.indexOf(event.name), 1)
+              // let I =tkn.waitList[i].indexOf(event.name)
+              // tkn.waitList[i] = tkn.waitList[i].filter(function(item, index) {
+              //   return index !== I;
+              // });
+              let l = i.length
+              if (l == 0) {
+                flag = false;
               }
-            
+            }
+
           }
 
         } while (flag)
-        return [cloneToken]
+        return [tkn]
 
 
       default:
         if (this[node.type]) {
-          this[node.type](node, cloneToken)
+          this[node.type](node, tkn)
         } else {
           if (node.eventType == 'request') {
-            defaultRequestEventDef(node, cloneToken);
+            defaultRequestEventDef(node, tkn);
           } else if (node.eventType == 'waitFor') {
-            defaultWaitForEventDef(node, cloneToken);
+            defaultWaitForEventDef(node, tkn);
           }
         }
-        return [cloneToken]
+        return [tkn]
     }
   } finally {
     for (let i = 0; i < block.length; i++) {
