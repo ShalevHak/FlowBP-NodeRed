@@ -1,6 +1,6 @@
 /* global bp */
 bp.log.info("start")
-const RED = {};
+const RED = {} 
 /**
  * Convert a string to an object or an array. 
  * The string can be of the form of JavaScript code or of the syntax: '{num:i,age: tkn.age} for i of tkn.arr'.
@@ -11,33 +11,54 @@ const RED = {};
  * @returns {object} or {array} result
  */
 function processPayload(payload, tkn) {
-
+  payload = payload +""
   if (typeof payload !== 'string') throw new Error("processPayload assumes a string")
+  const regex = /(.+) for (\w+) of (.+)/
+  const match = payload.match(regex)
+  if(match){
+    const objectStr = match[1]
+    const variableName = match[2]
+    const arrayStr = match[3]
+    let array = arrayStr
 
-  // Split the payload into parts
-  const parts = payload.split(" for ");
-  if (parts.length === 2) {
-    const objectStr = parts[0].trim();
-    const iterationStr = parts[1].trim().split(" of ");
-
-    if (iterationStr.length === 2) {
-      const variableName = iterationStr[0].trim();
-      const arrayStr = iterationStr[1].trim();
-      // Evaluate the array expression
-      const array = eval(arrayStr);
-      if (Array.isArray(array)) {
-        // Create an array of objects using the provided expression
-        const arrayMap = '[' + array + '].map(' + variableName + ' => (' + objectStr + '))'
-        const result = eval(arrayMap)
-        return result
-      }
+    if (!Array.isArray(eval(array))) {
+      array=eval(array)
     }
+    
+    // Create an array of objects using the provided expression
+    const arrayMap = arrayStr + '.map(' + variableName + ' => (' + objectStr + '))'
+    const result = eval(arrayMap)
+    return result
   }
   // If the payload doesn't match the specified format, use eval and return
-  return eval(payload);
+  return eval("("+payload+")")
+  // if (typeof payload !== 'string') throw new Error("processPayload assumes a string")
+
+  // // Split the payload into parts
+  // const parts = payload.split(" for ") 
+  // if (parts.length === 2) {
+  //   const objectStr = parts[0].trim() 
+  //   const iterationStr = parts[1].trim().split(" of ") 
+
+  //   if (iterationStr.length === 2) {
+  //     const variableName = iterationStr[0].trim() 
+  //     const arrayStr = iterationStr[1].trim() 
+  //     // Evaluate the array expression
+  //     const array = eval(arrayStr) 
+  //     if (Array.isArray(array)) {
+  //       // Create an array of objects using the provided expression
+  //       const arrayMap = arrayStr + '.map(' + variableName + ' => (' + objectStr + '))'
+  //       const result = eval(arrayMap)
+  //       return result
+  //     }
+  //   }
+  // }
+  // // If the payload doesn't match the specified format, use eval and return
+  // return eval("("+payload+")") 
 }
 function processEvent(event, tkn) {
   let e = processPayload(event, tkn)
+  
   if (Array.isArray(e)) {
     let eventsArr = []
     for (var i = 0; i < e.length; i++) {
@@ -45,7 +66,12 @@ function processEvent(event, tkn) {
     }
     return eventsArr
   }
-  return bp.Event(String(e))
+  else if(typeof(e)==='string') {
+    return bp.Event(e)
+  }
+  else{
+    return e; 
+  }
 }
 function GetAttribute(att, Token) {
   return Token[att]
@@ -54,50 +80,38 @@ function SetAttribute(att, value, Token) {
   Token[att] = value
 }
 function GetTknAtt(str, Token) {
-  const pattern = /tkn\.(\w+)/g;
-  const resultString = str.replace(pattern, (match, p1) => Token[p1]);
-  return resultString;
+  const pattern = /tkn\.(\w+)/g 
+  const resultString = str.replace(pattern, (match, p1) => Token[p1]) 
+  return resultString 
 }
 
 
-var nodes = new Map();
-var starts = [];
-var disabledTabs = [];
-var groups = {};
+var nodes = new Map() 
+var starts = [] 
+var disabledTabs = [] 
+var groups = {} 
 for (let n of model.config.flows) {
   if (n.type === 'tab' && n.disabled) {
-    disabledTabs.push(n.id);
+    disabledTabs.push(n.id) 
   } else if (n.type === 'group') {
-    groups[n.id] = n;
+    groups[n.id] = n 
+  }
+}
+for (let n of model.config.flows) {
+  if (!disabledTabs.includes(n.z) && !n.d) {
+    if(n.type == "executeCode"){
+      eval(n.info)
+    }
   }
 }
 for (let n of model.config.flows) {
   if (!disabledTabs.includes(n.z) && !n.d) {
     nodes.set(n.id, n)
     if (n.type == "start") {
-      // bp.log.info("node is start")
-      // bp.log.info("unprocessed: "+eval(n.payload))
-      // bp.log.info("processed payload: "+processPayload(eval(n.payload)))
       let payload = n.payload || "{}"
       let token = processPayload(payload)/*eval(payload)*/
-      n.token = token;
-      // if (RED.nodeRedAdapter) {
-      //   bp.log.info("RED.nodeRedAdapter")
-      //   let t = JSON.parse(token);
-      //   if (Array.isArray(t)) {
-      //     bp.log.info("is an arr: " + t)
-      //     for (let tkn of t) {
-      //       RED.nodeRedAdapter.updateToken(n, tkn, true);
-      //     }
-
-      //   }
-      //   else {
-      //     bp.log.info("is not an arr: " + t)
-      //     RED.nodeRedAdapter.updateToken(n, t, true);
-      //   }
-
-      // }
-      starts.push(n);
+      n.token = token 
+      starts.push(n) 
     }
   }
 }
@@ -106,14 +120,14 @@ for (let n of model.config.flows) {
 //-------------------------------------------------------------------------------
 
 for (let n of starts) {
-  let token = n.token || {};
+  let token = n.token || {} 
   if (Array.isArray(token)) {
     for (let tkn of token) {
-      spawn_bthread(n, tkn);
+      spawn_bthread(n, tkn) 
     }
   }
   else {
-    spawn_bthread(n, token);
+    spawn_bthread(n, token) 
   }
 }
 
@@ -125,7 +139,7 @@ function spawn_bthread(node, token) {
     do {
       let tokens = execute(node, token) //[{sdfsdf},undefined]  [undefined,{sdfsdf}]
       if (RED.nodeRedAdapter) {
-        RED.nodeRedAdapter.updateToken(node, token, false);
+        RED.nodeRedAdapter.updateToken(node, token, false) 
       }
       token = undefined
 
@@ -136,7 +150,7 @@ function spawn_bthread(node, token) {
               let followerNode = nodes.get(follower)
               let followerToken = JSON.parse(JSON.stringify(tokens[i]))
               if (RED.nodeRedAdapter) {
-                RED.nodeRedAdapter.updateToken(followerNode, followerToken, true);
+                RED.nodeRedAdapter.updateToken(followerNode, followerToken, true) 
               }
               if (!token) {
                 // The first token will be executed in this b-thread
@@ -157,13 +171,12 @@ function spawn_bthread(node, token) {
 
 //-------------------------------------------------------------------------------
 // Here we define the semantics of the nodes.
-
 //-------------------------------------------------------------------------------
 function execute(node, token) {
-  let tkn = JSON.parse(JSON.stringify(token))
-  let event;
-  let block = [];
-  let waitFor = [];
+  let tkn = ((token))
+  let event 
+  let block = [] 
+  let waitFor = [] 
   try {
     if (node.g) {
       let name = groups[node.g].name
@@ -175,10 +188,10 @@ function execute(node, token) {
       waitFor = matches[2].split(',').map(v => v.trim()).map(v => v.replace(/"/g, '')).filter(v => v.length > 0)
 
       for (let i = 0; i < block.length; i++) {
-        bp.thread.data.block.push(Any(block[i]));
+        bp.thread.data.block.push(Any(block[i])) 
       }
       for (let i = 0; i < waitFor.length; i++) {
-        bp.thread.data.waitFor.push(Any(waitFor[i]));
+        bp.thread.data.waitFor.push(Any(waitFor[i])) 
       }
     }
     switch (node.type) {
@@ -204,25 +217,28 @@ function execute(node, token) {
         if (node.varName) {
           counterVarName = node.varName
         }
-
+        node.to=eval(node.to+"")
+        node.skip=eval(node.skip+"")
+        node.from=eval(node.from+"")
         switch (node.loopOver) {
-
+          
           case "numbers":
-            if (eval("tkn."+counterVarName+"!= null")) {
-              if (eval("tkn."+counterVarName+"+ < node.to")) {
-                eval("tkn."+counterVarName +"+= parseInt(node.skip)")
+            if (eval("tkn." + counterVarName + "!= null")) {
+              if (eval("tkn." + counterVarName + "< parseInt(node.to)")) {
+                eval("tkn." + counterVarName + "+= parseInt(node.skip)")
                 return [tkn, undefined]
               } else {
-                eval("tkn."+counterVarName+" = null")//Deleting the unique count attribute after exiting the loop
+                eval("tkn." + counterVarName + " = null")//Deleting the unique count attribute after exiting the loop
                 return [undefined, tkn]
+                
               }
             } else {
               eval("tkn." + counterVarName + "=" + parseInt(node.from))//Adding a unique count attribute named after the node's id
               return [tkn, undefined]
             }
           case "list":
-            if (eval("tkn."+counterVarName+"!= null")) {
-              if (eval("tkn.list_" + counterVarName+".length > 1")) {//Todo: remove eval
+            if (eval("tkn." + counterVarName + "!= null")) {
+              if (eval("tkn.list_" + counterVarName + ".length > 1")) {//Todo: remove eval
                 eval("tkn.list_" + counterVarName + ".splice(0,1)")//Deletes the first element of the list
                 eval("tkn." + counterVarName + "=" + "tkn.list_" + counterVarName + "[0]")//Sets the element as the new first element
                 return [tkn, undefined]
@@ -242,23 +258,23 @@ function execute(node, token) {
 
       case "if-then-else":
         if (node.condition) {
-          if (eval(node.condition)) {  // "3333+1" -> 3334
+          if (eval(node.condition)) {
             return [tkn, undefined]
           } else {
             return [undefined, tkn]
           }
         }
       case "set-attribute":
-
-        if (node.value && node.attribute) {
-          try{
-            eval("tkn." + node.attribute + "=" + (processPayload(node.value,tkn)))
-          }
-          catch(err){
-            bp.log.info("error: "+err+"\n"+"Node id: "+node.id+"\n Evaluated string: "+"tkn." + node.attribute + "=" + (processPayload(node.value,tkn))
-            +"\n Original code: "+node.value);
-          }
-        }
+        tkn[node.attribute] = processPayload(node.value,tkn)
+        // if (node.value && node.attribute) {
+        //   try{
+        //     eval("tkn." + node.attribute + "=" + (processPayload(node.value,tkn)))
+        //   }
+        //   catch(err){
+        //     bp.log.info("error: "+err+"\n"+"Node id: "+node.id+"\n Evaluated string: "+"tkn." + node.attribute + "=" + (processPayload(node.value,tkn))
+        //     +"\n Original code: "+node.value) 
+        //   }
+        // }
         return [tkn]
 
       //-----------------------------------------------------------------------
@@ -266,6 +282,23 @@ function execute(node, token) {
       //-----------------------------------------------------------------------
       case "bsync":
         let stmt = {}
+
+        // if(node.name){
+        //   bp.log.info(node.name)
+        //   bp.log.info(tkn)
+        //   if(node.request!= "") {
+        //     bp.log.info("- req: ")
+        //     bp.log.info(processEvent(node.request, tkn))
+        // }
+        //   if(node.block!= ""){
+        //     bp.log.info("- block: ")
+        //     bp.log.info(processEvent(node.block, tkn))
+        //   } 
+        //   if(node.waitFor!= ""){
+        //     bp.log.info("- wait: ")
+        //     bp.log.info(processEvent(node.waitFor, tkn))
+        //   } 
+        // } 
         if (node.priority) {
           tkn.priority = eval(node.priority)
         }
@@ -274,25 +307,24 @@ function execute(node, token) {
         }
         if (tkn.request) {
           stmt.request = processEvent(tkn.request, tkn)
-          tkn.request = null;
+          tkn.request = null 
         } else if (node.request != "") {
           stmt.request = processEvent(node.request, tkn)
         }
 
         if (tkn.waitFor) {
           stmt.waitFor = processEvent(tkn.waitFor, tkn)
-          tkn.waitFor = null;
+          tkn.waitFor = null 
         } else if (node.waitFor != "") {
           stmt.waitFor = processEvent(node.waitFor, tkn)
         }
 
         if (tkn.block) {
           stmt.block = processEvent(tkn.block, tkn)
-          tkn.block = null;
+          tkn.block = null 
         } else if (node.block != "") {
           stmt.block = processEvent(node.block, tkn)
         }
-
         event = sync(stmt, -tkn.priority)
         tkn.selectedEvent = { name: String(event.name) }
         if (event.data != null) tkn.selectedEvent.data = event.data
@@ -316,7 +348,7 @@ function execute(node, token) {
           else
             return [tkn]
         }
-        let isNotArr = false;
+        let isNotArr = false 
         for (let l of tkn.waitList) {
           if (!Array.isArray(l)) {
             isNotArr = true
@@ -325,10 +357,10 @@ function execute(node, token) {
         if (isNotArr) {
           tkn.waitList = [tkn.waitList]
         }
-        let waitstmt = {};
-        var flag = true;
+        let waitstmt = {} 
+        var flag = true 
         do {
-          let arr = [];
+          let arr = [] 
           for (let l of tkn.waitList)
             arr = arr.concat(l)
           for (i in arr)
@@ -338,16 +370,11 @@ function execute(node, token) {
           tkn.selectedEvent = { name: String(event.name) }
           if (event.data != null) tkn.selectedEvent.data = event.data
           for (let i of tkn.waitList) {
-            bp.log.fine(i)
             if (i.includes(event.name)) {
               i.splice(i.indexOf(event.name), 1)
-              // let I =tkn.waitList[i].indexOf(event.name)
-              // tkn.waitList[i] = tkn.waitList[i].filter(function(item, index) {
-              //   return index !== I;
-              // });
               let l = i.length
               if (l == 0) {
-                flag = false;
+                flag = false 
               }
             }
 
@@ -362,9 +389,9 @@ function execute(node, token) {
           this[node.type](node, tkn)
         } else {
           if (node.eventType == 'request') {
-            defaultRequestEventDef(node, tkn);
+            defaultRequestEventDef(node, tkn) 
           } else if (node.eventType == 'waitFor') {
-            defaultWaitForEventDef(node, tkn);
+            defaultWaitForEventDef(node, tkn) 
           }
         }
         return [tkn]
