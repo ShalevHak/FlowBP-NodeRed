@@ -40,9 +40,10 @@ RED.nodeRedAdapter = {
 
   updateToken: function (n, token, add) {
     this.sendMessage(this.Message(this.EngineMessageTypes.STATE, {id: n.id, add: add, token: token}))
-    if(add) {
-      return this.receiveMessage()
-    }
+    java.lang.Thread.sleep(100)
+    // if(add) {
+    //   return this.receiveMessage()
+    // }
   },
 
   Message: function (type, payload) {

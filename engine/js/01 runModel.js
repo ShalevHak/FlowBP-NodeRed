@@ -32,29 +32,6 @@ function processPayload(payload, tkn) {
   }
   // If the payload doesn't match the specified format, use eval and return
   return eval("("+payload+")")
-  // if (typeof payload !== 'string') throw new Error("processPayload assumes a string")
-
-  // // Split the payload into parts
-  // const parts = payload.split(" for ") 
-  // if (parts.length === 2) {
-  //   const objectStr = parts[0].trim() 
-  //   const iterationStr = parts[1].trim().split(" of ") 
-
-  //   if (iterationStr.length === 2) {
-  //     const variableName = iterationStr[0].trim() 
-  //     const arrayStr = iterationStr[1].trim() 
-  //     // Evaluate the array expression
-  //     const array = eval(arrayStr) 
-  //     if (Array.isArray(array)) {
-  //       // Create an array of objects using the provided expression
-  //       const arrayMap = arrayStr + '.map(' + variableName + ' => (' + objectStr + '))'
-  //       const result = eval(arrayMap)
-  //       return result
-  //     }
-  //   }
-  // }
-  // // If the payload doesn't match the specified format, use eval and return
-  // return eval("("+payload+")") 
 }
 function processEvent(event, tkn) {
   let e = processPayload(event, tkn)
@@ -282,28 +259,18 @@ function execute(node, token) {
       //-----------------------------------------------------------------------
       case "bsync":
         let stmt = {}
-
-        // if(node.name){
-        //   bp.log.info(node.name)
-        //   bp.log.info(tkn)
-        //   if(node.request!= "") {
-        //     bp.log.info("- req: ")
-        //     bp.log.info(processEvent(node.request, tkn))
-        // }
-        //   if(node.block!= ""){
-        //     bp.log.info("- block: ")
-        //     bp.log.info(processEvent(node.block, tkn))
-        //   } 
-        //   if(node.waitFor!= ""){
-        //     bp.log.info("- wait: ")
-        //     bp.log.info(processEvent(node.waitFor, tkn))
-        //   } 
-        // } 
-        if (node.priority) {
-          tkn.priority = eval(node.priority)
+        let priority={}
+        if (node.requestPriority) {
+          priority.requestPriority = eval(node.requestPriority)
         }
         else {
-          tkn.priority = Infinity
+          priority.requestPriority = Infinity
+        }
+        if (node.blockPriority) {
+          priority.blockPriority = eval(node.blockPriority)
+        }
+        else {
+          priority.blockPriority = 0
         }
         if (tkn.request) {
           stmt.request = processEvent(tkn.request, tkn)
@@ -325,7 +292,7 @@ function execute(node, token) {
         } else if (node.block != "") {
           stmt.block = processEvent(node.block, tkn)
         }
-        event = sync(stmt, -tkn.priority)
+        event = sync(stmt, priority)
         tkn.selectedEvent = { name: String(event.name) }
         if (event.data != null) tkn.selectedEvent.data = event.data
         return [tkn]
